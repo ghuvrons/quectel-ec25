@@ -17,7 +17,6 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
-#include <dma_streamer.h>
 
 
 // static function initiation
@@ -30,7 +29,7 @@ static void str2Time(QTEL_Datetime*, const char*);
 
 QTEL_Status_t QTEL_Init(QTEL_HandlerTypeDef *hqtel)
 {
-  QTEL_Debug("Init %d");
+  QTEL_Debug("Init");
   if (hqtel->serial.device == NULL
       || hqtel->serial.read == NULL
       || hqtel->serial.readline == NULL
@@ -116,7 +115,7 @@ void QTEL_HandleEvents(QTEL_HandlerTypeDef *hqtel)
 {
   // check async response
   if (hqtel->status == 0 && (QTEL_GetTick() - hqtel->initAt > hqtel->timeout)) {
-    if (!QTEL_CheckAT(hqtel)) {
+    if (QTEL_CheckAT(hqtel) != QTEL_OK) {
       hqtel->initAt = QTEL_GetTick();
       return;
     } else {
@@ -129,18 +128,18 @@ void QTEL_HandleEvents(QTEL_HandlerTypeDef *hqtel)
     QTEL_BITS_UNSET(hqtel->events, QTEL_EVENT_ON_STARTING);
     QTEL_reset(hqtel);
     QTEL_Debug("Starting...");
-    if (QTEL_CheckAT(hqtel)) {
+    if (QTEL_CheckAT(hqtel) == QTEL_OK) {
       QTEL_Echo(hqtel, 0);
       QTEL_BITS_SET(hqtel->events, QTEL_EVENT_ON_STARTED);
     }
   }
   if (QTEL_IS_STATUS(hqtel, QTEL_STATUS_ACTIVE) && !QTEL_IS_STATUS(hqtel, QTEL_STATUS_SIMCARD_READY)) {
-    if(!QTEL_CheckSIMCard(hqtel)) {
+    if(QTEL_CheckSIMCard(hqtel) != QTEL_OK) {
       QTEL_Delay(3000);
     }
   }
   if (QTEL_IS_STATUS(hqtel, QTEL_STATUS_SIMCARD_READY) && !QTEL_IS_STATUS(hqtel, QTEL_STATUS_REGISTERED)) {
-    if(!QTEL_ReqisterNetwork(hqtel)) {
+    if(QTEL_ReqisterNetwork(hqtel) != QTEL_OK) {
       QTEL_Delay(3000);
     }
   }
@@ -174,42 +173,46 @@ void QTEL_HandleEvents(QTEL_HandlerTypeDef *hqtel)
 }
 
 
-void QTEL_Echo(QTEL_HandlerTypeDef *hqtel, uint8_t onoff)
+QTEL_Status_t QTEL_Echo(QTEL_HandlerTypeDef *hqtel, uint8_t onoff)
 {
+  QTEL_Status_t status = QTEL_ERROR;
+
   QTEL_LOCK(hqtel);
   if (onoff)
     QTEL_SendCMD(hqtel, "ATE1");
   else
     QTEL_SendCMD(hqtel, "ATE0");
-  // wait response
-  if (QTEL_IsResponseOK(hqtel)) {}
+  if (!QTEL_IsResponseOK(hqtel)) goto endcmd;
+
+  endcmd:
   QTEL_UNLOCK(hqtel);
+  return status;
 }
 
 
-uint8_t QTEL_CheckAT(QTEL_HandlerTypeDef *hqtel)
+QTEL_Status_t QTEL_CheckAT(QTEL_HandlerTypeDef *hqtel)
 {
-  uint8_t isOK = 0;
-  // send command;
+  QTEL_Status_t status = QTEL_ERROR;
+  
   QTEL_LOCK(hqtel);
+  
   QTEL_SendCMD(hqtel, "AT");
-
-  // wait response
-  if (QTEL_IsResponseOK(hqtel)){
-    isOK = 1;
-    QTEL_SET_STATUS(hqtel, QTEL_STATUS_ACTIVE);
-  } else {
+  if (!QTEL_IsResponseOK(hqtel)) {
     QTEL_UNSET_STATUS(hqtel, QTEL_STATUS_ACTIVE);
+    goto endcmd;
   }
-  QTEL_UNLOCK(hqtel);
+  status = QTEL_OK;
+  QTEL_SET_STATUS(hqtel, QTEL_STATUS_ACTIVE);
 
-  return isOK;
+  endcmd:
+  QTEL_UNLOCK(hqtel);
+  return status;
 }
 
 
-uint8_t QTEL_CheckSignal(QTEL_HandlerTypeDef *hqtel)
+int16_t QTEL_GetSignal(QTEL_HandlerTypeDef *hqtel)
 {
-  uint8_t signal = 0;
+  int16_t signal = 0;
   uint8_t *resp = &hqtel->respTmp[0];
   char *signalStr = (char*) &hqtel->respTmp[32];
 
@@ -223,10 +226,12 @@ uint8_t QTEL_CheckSignal(QTEL_HandlerTypeDef *hqtel)
 
   // do with response
   if (QTEL_GetResponse(hqtel, "+CSQ", 4, resp, 16, QTEL_GETRESP_WAIT_OK, 2000) == QTEL_OK) {
-    QTEL_ParseStr(resp, ',', 1, (uint8_t*) signalStr);
-    signal = (uint8_t) atoi((char*)resp);
+    QTEL_ParseStr(resp, ',', 1, (int16_t*) signalStr);
+    signal = (int16_t) atoi((char*)resp);
     hqtel->signal = signal;
   }
+  else goto errorHandle;
+
   QTEL_UNLOCK(hqtel);
 
   if (signal == 99) {
@@ -236,40 +241,46 @@ uint8_t QTEL_CheckSignal(QTEL_HandlerTypeDef *hqtel)
   }
 
   return hqtel->signal;
+
+  errorHandle:
+  QTEL_UNLOCK(hqtel);
+  return (int16_t) QTEL_ERROR;
 }
 
 
-uint8_t QTEL_CheckSIMCard(QTEL_HandlerTypeDef *hqtel)
+QTEL_Status_t QTEL_CheckSIMCard(QTEL_HandlerTypeDef *hqtel)
 {
-  uint8_t *resp = &hqtel->respTmp[0];
-  uint8_t isOK = 0;
+  QTEL_Status_t status  = QTEL_ERROR;
+  uint8_t       *resp   = &hqtel->respTmp[0];
 
   QTEL_LOCK(hqtel);
 
   memset(resp, 0, 11);
   QTEL_SendCMD(hqtel, "AT+CPIN?");
-  if (QTEL_GetResponse(hqtel, "+CPIN", 5, resp, 10, QTEL_GETRESP_WAIT_OK, 2000) == QTEL_OK) {
-    // resp_n = (uint8_t) atoi((char*)&resp[0]);
-    if (strcmp((char*) resp, "READY")) {
-      QTEL_Debug("SIM Ready.");
-      isOK = 1;
-      QTEL_SET_STATUS(hqtel, QTEL_STATUS_SIMCARD_READY);
-    }
-  } else {
+  status = QTEL_GetResponse(hqtel, "+CPIN", 5, resp, 10, QTEL_GETRESP_WAIT_OK, 2000);
+  if (status != QTEL_OK) {
     QTEL_Debug("SIM card error.");
+    goto endcmd;
   }
+  
+  if (strcmp((char*) resp, "READY")) {
+    QTEL_Debug("SIM Ready.");
+    status = QTEL_OK;
+    QTEL_SET_STATUS(hqtel, QTEL_STATUS_SIMCARD_READY);
+  }
+
+  endcmd:
   QTEL_UNLOCK(hqtel);
-  return isOK;
+  return status;
 }
 
 
-uint8_t QTEL_ReqisterNetwork(QTEL_HandlerTypeDef *hqtel)
+QTEL_Status_t QTEL_ReqisterNetwork(QTEL_HandlerTypeDef *hqtel)
 {
-  uint8_t *resp = &hqtel->respTmp[0];
-  // uint8_t resp_n = 0;
-  uint8_t resp_stat = 0;
-  uint8_t resp_mode = 0;
-  uint8_t isOK = 0;
+  QTEL_Status_t status    = QTEL_ERROR;
+  uint8_t       *resp     = &hqtel->respTmp[0];
+  uint8_t       resp_stat = 0;
+  uint8_t       resp_mode = 0;
 
   // send command then get response;
   QTEL_LOCK(hqtel);
@@ -286,7 +297,7 @@ uint8_t QTEL_ReqisterNetwork(QTEL_HandlerTypeDef *hqtel)
   if (resp_stat == 1 || resp_stat == 5) {
     QTEL_SET_STATUS(hqtel, QTEL_STATUS_REGISTERED);
     QTEL_BITS_SET(hqtel->events, QTEL_EVENT_ON_REGISTERED);
-    isOK = 1;
+    status = QTEL_OK;
     if (resp_stat == 5) {
       QTEL_SET_STATUS(hqtel, QTEL_STATUS_ROAMING);
     }
@@ -300,10 +311,10 @@ uint8_t QTEL_ReqisterNetwork(QTEL_HandlerTypeDef *hqtel)
       // Select operator automatically
       memset(resp, 0, 16);
       QTEL_SendCMD(hqtel, "AT+COPS?");
-      if (QTEL_GetResponse(hqtel, "+COPS", 5, resp, 1, QTEL_GETRESP_WAIT_OK, 2000) == QTEL_OK) {
-        resp_mode = (uint8_t) atoi((char*) resp);
-      }
-      else goto endcmd;
+      status = QTEL_GetResponse(hqtel, "+COPS", 5, resp, 1, QTEL_GETRESP_WAIT_OK, 2000);
+      if (status != QTEL_OK) goto endcmd;
+
+      resp_mode = (uint8_t) atoi((char*) resp);
 
       QTEL_SendCMD(hqtel, "AT+COPS=?");
       if (!QTEL_IsResponseOK(hqtel)) goto endcmd;
@@ -315,8 +326,11 @@ uint8_t QTEL_ReqisterNetwork(QTEL_HandlerTypeDef *hqtel)
         QTEL_SendCMD(hqtel, "AT+COPS");
         if (!QTEL_IsResponseOK(hqtel)) goto endcmd;
       }
+
+      status = QTEL_OK;
     }
     else if (resp_stat == 2) {
+      status = QTEL_OK;
       QTEL_Debug("Searching network....");
       QTEL_Delay(2000);
     }
@@ -324,20 +338,26 @@ uint8_t QTEL_ReqisterNetwork(QTEL_HandlerTypeDef *hqtel)
 
   endcmd:
   QTEL_UNLOCK(hqtel);
-  return isOK;
+  return status;
 }
 
 
-void QTEL_AutoUpdateTZ(QTEL_HandlerTypeDef *hqtel, uint8_t enable)
+QTEL_Status_t QTEL_AutoUpdateTZ(QTEL_HandlerTypeDef *hqtel, uint8_t enable)
 {
+  QTEL_Status_t status = QTEL_ERROR;
+
   QTEL_LOCK(hqtel);
   if (enable)
     QTEL_SendCMD(hqtel, "AT+CTZU=3");
   else
     QTEL_SendCMD(hqtel, "AT+CTZU=0");
-  // wait response
-  if (QTEL_IsResponseOK(hqtel)) {}
+
+  if (!QTEL_IsResponseOK(hqtel)) goto endcmd;
+  status = QTEL_OK;
+
+  endcmd:
   QTEL_UNLOCK(hqtel);
+  return status;
 }
 
 
@@ -379,20 +399,23 @@ void QTEL_HashTime(QTEL_HandlerTypeDef *hqtel, char *hashed)
 }
 
 
-void QTEL_SendUSSD(QTEL_HandlerTypeDef *hqtel, const char *ussd)
+QTEL_Status_t QTEL_SendUSSD(QTEL_HandlerTypeDef *hqtel, const char *ussd)
 {
-  if (!QTEL_IS_STATUS(hqtel, QTEL_STATUS_REGISTERED)) return;
+  QTEL_Status_t status = QTEL_ERROR;
+
+  if (!QTEL_IS_STATUS(hqtel, QTEL_STATUS_REGISTERED)) return status;
 
   QTEL_LOCK(hqtel);
   QTEL_SendCMD(hqtel, "AT+CSCS=\"GSM\"");
-  if (!QTEL_IsResponseOK(hqtel)){
-    goto endcmd;
-  }
+  if (!QTEL_IsResponseOK(hqtel)) goto endcmd;
 
   QTEL_SendCMD(hqtel, "AT+CUSD=1,%s,15", ussd);
+  if (!QTEL_IsResponseOK(hqtel)) goto endcmd;
+  status = QTEL_OK;
 
   endcmd:
   QTEL_UNLOCK(hqtel);
+  return status;
 }
 
 

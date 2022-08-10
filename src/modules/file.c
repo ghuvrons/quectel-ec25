@@ -138,7 +138,7 @@ int32_t QTEL_File_Write(QTEL_File_t *hfile, const uint8_t *srcData, uint16_t dat
 
   endcmd:
   QTEL_UNLOCK(hfile->hqtel);
-  if (status != QTEL_OK) return -1;
+  if (status != QTEL_OK) return (int32_t) status;
   return (int32_t) writelen;
 }
 
@@ -170,7 +170,7 @@ int32_t QTEL_File_Read(QTEL_File_t *hfile, uint8_t *dstBuf, uint16_t bufSz)
 
   endcmd:
   QTEL_UNLOCK(hfile->hqtel);
-  if (status != QTEL_OK) return -1;
+  if (status != QTEL_OK) return (int32_t) status;
   return (int32_t) readLen;
 }
 

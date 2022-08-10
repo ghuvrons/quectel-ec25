@@ -159,15 +159,15 @@ QTEL_Status_t QTEL_Init(QTEL_HandlerTypeDef*);
 void          QTEL_CheckAnyResponse(QTEL_HandlerTypeDef*);
 void          QTEL_CheckAsyncResponse(QTEL_HandlerTypeDef*);
 void          QTEL_HandleEvents(QTEL_HandlerTypeDef*);
-void          QTEL_Echo(QTEL_HandlerTypeDef*, uint8_t onoff);
-uint8_t       QTEL_CheckAT(QTEL_HandlerTypeDef*);
-uint8_t       QTEL_CheckSignal(QTEL_HandlerTypeDef*);
-uint8_t       QTEL_CheckSIMCard(QTEL_HandlerTypeDef*);
-uint8_t       QTEL_ReqisterNetwork(QTEL_HandlerTypeDef*);
-void          QTEL_AutoUpdateTZ(QTEL_HandlerTypeDef*, uint8_t enable);
+QTEL_Status_t QTEL_Echo(QTEL_HandlerTypeDef*, uint8_t onoff);
+QTEL_Status_t QTEL_CheckAT(QTEL_HandlerTypeDef*);
+int16_t       QTEL_GetSignal(QTEL_HandlerTypeDef*);
+QTEL_Status_t QTEL_CheckSIMCard(QTEL_HandlerTypeDef*);
+QTEL_Status_t QTEL_ReqisterNetwork(QTEL_HandlerTypeDef*);
+QTEL_Status_t QTEL_AutoUpdateTZ(QTEL_HandlerTypeDef*, uint8_t enable);
 QTEL_Datetime QTEL_GetTime(QTEL_HandlerTypeDef*);
 void          QTEL_HashTime(QTEL_HandlerTypeDef*, char *hashed);
-void          QTEL_SendSms(QTEL_HandlerTypeDef*);
-void          QTEL_SendUSSD(QTEL_HandlerTypeDef*, const char *ussd);
+QTEL_Status_t QTEL_SendSms(QTEL_HandlerTypeDef*);
+QTEL_Status_t QTEL_SendUSSD(QTEL_HandlerTypeDef*, const char *ussd);
 
 #endif /* QTEL_QUECTEL_EC25_INC_QUECTEL_H_ */
