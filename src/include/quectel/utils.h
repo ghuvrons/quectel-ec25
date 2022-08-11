@@ -15,10 +15,10 @@
 // MACROS
 
 #ifndef QTEL_GetTick
-#define QTEL_GetTick() HAL_GetTick()
+#define QTEL_GetTick() 0
 #endif
 #ifndef QTEL_Delay
-#define QTEL_Delay(ms) HAL_Delay(ms)
+#define QTEL_Delay(ms) {}
 #endif
 
 #define QTEL_IsTimeout(lastTick, timeout) ((QTEL_GetTick() - (lastTick)) > (timeout))

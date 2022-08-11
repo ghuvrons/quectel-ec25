@@ -226,7 +226,7 @@ int16_t QTEL_GetSignal(QTEL_HandlerTypeDef *hqtel)
 
   // do with response
   if (QTEL_GetResponse(hqtel, "+CSQ", 4, resp, 16, QTEL_GETRESP_WAIT_OK, 2000) == QTEL_OK) {
-    QTEL_ParseStr(resp, ',', 1, (int16_t*) signalStr);
+    QTEL_ParseStr(resp, ',', 1, (uint8_t*) signalStr);
     signal = (int16_t) atoi((char*)resp);
     hqtel->signal = signal;
   }

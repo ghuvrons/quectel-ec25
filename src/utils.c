@@ -45,7 +45,7 @@ uint8_t QTEL_WaitResponse(QTEL_HandlerTypeDef *hqtel,
                           const char *respCode, uint16_t rcsize,
                           uint32_t timeout)
 {
-  uint32_t tickstart = STRM_GetTick();
+  uint32_t tickstart = QTEL_GetTick();
 
   if (hqtel->serial.device == NULL
       || hqtel->serial.read == NULL
@@ -55,7 +55,7 @@ uint8_t QTEL_WaitResponse(QTEL_HandlerTypeDef *hqtel,
   if (timeout == 0) timeout = hqtel->timeout;
 
   while (1) {
-    if((STRM_GetTick() - tickstart) >= timeout) break;
+    if((QTEL_GetTick() - tickstart) >= timeout) break;
     hqtel->respBufferLen = hqtel->serial.read(hqtel->serial.device, hqtel->respBuffer, rcsize, timeout);
     if (QTEL_IsResponse(hqtel, respCode, rcsize)) {
       return 1;
