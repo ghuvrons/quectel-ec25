@@ -5,8 +5,8 @@
  *      Author: janoko
  */
 
-#ifndef APP_MODULES_MODEM_H_
-#define APP_MODULES_MODEM_H_
+#ifndef QTEL_QUECTEL_EC25_SIMPLE_MODEM_H_
+#define QTEL_QUECTEL_EC25_SIMPLE_MODEM_H_
 
 #include <_defs/general.h>
 #include <_defs/types.h>
@@ -30,15 +30,13 @@ typedef struct {
 
 extern MDM_HandlerTypedef Mod_Modem;
 
-bool MDM_Init(void);
-void MDM_Run(void *args);
-Datetime_t MDM_GetTime(void);
-void MDM_SendUSSD(const char*);
-void MDM_Reset(void);
-bool MDM_WaitReady(uint32_t timeout);
+bool        MDM_Init(void);
+void        MDM_Run(void *args);
+void        MDM_Reset(void);
+bool        MDM_WaitReady(uint32_t timeout);
 
 #if QTEL_EN_FEATURE_GPS
 bool MDM_IsGPSWeakSignal(void);
 #endif
 
-#endif /* APP_MODULES_MODEM_H_ */
+#endif /* QTEL_QUECTEL_EC25_SIMPLE_MODEM_H */
