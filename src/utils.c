@@ -94,9 +94,9 @@ QTEL_Status_t QTEL_GetResponse(QTEL_HandlerTypeDef *hqtel,
                                uint32_t timeout)
 {
   uint16_t i;
-  uint8_t resp = QTEL_TIMEOUT;
-  uint8_t flagToReadResp = 0;
-  uint32_t tickstart = QTEL_GetTick();
+  QTEL_Status_t status          = QTEL_TIMEOUT;
+  uint8_t       flagToReadResp  = 0;
+  uint32_t      tickstart       = QTEL_GetTick();
 
   if (hqtel->serial.device == NULL || hqtel->serial.readline == NULL) return 0;
   if (timeout == 0) timeout = hqtel->timeout;
@@ -126,19 +126,19 @@ QTEL_Status_t QTEL_GetResponse(QTEL_HandlerTypeDef *hqtel,
         }
         if (rdsize) *respData = 0;
         if (getRespType == QTEL_GETRESP_ONLY_DATA) {
-          resp = QTEL_OK;
+          status = QTEL_OK;
           break;
         }
-        if (resp != QTEL_TIMEOUT) break;
+        if (status != QTEL_TIMEOUT) break;
       }
       else if (getRespType != QTEL_GETRESP_ONLY_DATA && QTEL_IsResponse(hqtel, "OK", 2)) {
-        resp = QTEL_OK;
+        status = QTEL_OK;
       }
       else if (QTEL_IsResponse(hqtel, "ERROR", 5)) {
-        resp = QTEL_ERROR;
+        status = QTEL_ERROR;
       }
       else if (QTEL_IsResponse(hqtel, "+CME ERROR", 10)) {
-        resp = QTEL_ERROR;
+        status = QTEL_ERROR;
         hqtel->respBuffer[hqtel->respBufferLen] = 0;
         QTEL_Debug("[Error] %s", (char*) (hqtel->respBuffer+10));
       }
@@ -149,13 +149,13 @@ QTEL_Status_t QTEL_GetResponse(QTEL_HandlerTypeDef *hqtel,
       }
 
       // break if will not get data
-      if (resp != QTEL_TIMEOUT) {
+      if (status != QTEL_TIMEOUT) {
         break;
       }
     }
   }
 
-  return resp;
+  return status;
 }
 
 
