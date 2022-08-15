@@ -84,7 +84,6 @@ void QTEL_GPS_HandleEvents(QTEL_HandlerTypeDef *hqtel)
 
   if (QTEL_GPS_IS_STATUS(hqtel, QTEL_GPS_STATUS_ACTIVE) && QTEL_IsTimeout(hqtel->gps.nmeaTick, 5000)) {
     hqtel->gps.nmeaTick = QTEL_GetTick();
-    QTEL_GPS_getLocation(hqtel);
     QTEL_GPS_AcquireNMEA(hqtel, "GGA");
     QTEL_GPS_AcquireNMEA(hqtel, "RMC");
     QTEL_GPS_AcquireNMEA(hqtel, "GSV");
