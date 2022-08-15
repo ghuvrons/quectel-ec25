@@ -14,8 +14,24 @@
 #include <string.h>
 
 
-__attribute__((weak)) void QTEL_Printf(const char *format, ...) {}
-__attribute__((weak)) void QTEL_Println(const char *format, ...) {}
+__attribute__((weak)) void QTEL_Printf(const char *format, ...)
+{
+  va_list args;
+
+  va_start (args, format);
+  vprintf(format, args);
+  va_end (args);
+}
+
+__attribute__((weak)) void QTEL_Println(const char *format, ...)
+{
+  va_list args;
+
+  va_start (args, format);
+  vprintf (format, args);
+  printf("\r\n");
+  va_end (args);
+}
 
 
 uint8_t QTEL_SendCMD(QTEL_HandlerTypeDef *hqtel, const char *format, ...)

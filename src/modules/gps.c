@@ -44,8 +44,11 @@ static char* keyStr[QTEL_GPS_CFG_KEYS_NUM] = {
 
 static QTEL_Status_t setGPSDefaultConfiguration(QTEL_HandlerTypeDef*);
 static void gpsProcessBuffer(QTEL_HandlerTypeDef*);
+
+#if QTEL_EN_FEATURE_HTTP
 static void writeXTraFile(QTEL_HandlerTypeDef*,
                           const uint8_t *data, uint16_t dataLen, uint32_t maxDataLen);
+#endif /* QTEL_EN_FEATURE_HTTP */
 
 
 uint8_t QTEL_GPS_CheckAsyncResponse(QTEL_HandlerTypeDef *hqtel)
@@ -63,8 +66,10 @@ uint8_t QTEL_GPS_CheckAsyncResponse(QTEL_HandlerTypeDef *hqtel)
 
 void QTEL_GPS_HandleEvents(QTEL_HandlerTypeDef *hqtel)
 {
-  if (QTEL_IS_STATUS(hqtel, QTEL_STATUS_ACTIVE) 
+  if (QTEL_IS_STATUS(hqtel, QTEL_STATUS_ACTIVE)
+      #if QTEL_EN_FEATURE_NET
       && QTEL_NET_IS_STATUS(hqtel, QTEL_NET_STATUS_OPEN)
+      #endif
       && !QTEL_GPS_IS_STATUS(hqtel, QTEL_GPS_STATUS_ACTIVE))
   {
     if (QTEL_GPS_Deactivate(hqtel) != QTEL_OK) {
@@ -182,15 +187,15 @@ QTEL_Status_t QTEL_GPS_SetupOneXTra(QTEL_HandlerTypeDef *hqtel)
   uint8_t       *resp   = &hqtel->respTmp[0];
   uint8_t       *strTmp = &hqtel->respTmp[32];
 
-  // activate gpsxtra
+  // activate gpsXtra
   QTEL_LOCK(hqtel);
-  QTEL_SendCMD(hqtel, "AT+QGPSXTRA=1"); // SUPL server
+  QTEL_SendCMD(hqtel, "AT+QGPSXTRA=1");
   if (!QTEL_IsResponseOK(hqtel)) goto endcmd;
 
-  // check whether ctradata was already
+  // check whether ctrAData was already
   memset(resp, 0, 32);
   memset(strTmp, 0, 8);
-  QTEL_SendCMD(hqtel, "AT+QGPSXTRADATA?"); // SUPL server
+  QTEL_SendCMD(hqtel, "AT+QGPSXTRADATA?");
   status = QTEL_GetResponse(hqtel, "+QGPSXTRADATA", 13, resp, 32, QTEL_GETRESP_WAIT_OK, 2000);
   if (status == QTEL_OK) {
     QTEL_ParseStr(resp, ',', 0, strTmp);
@@ -199,50 +204,62 @@ QTEL_Status_t QTEL_GPS_SetupOneXTra(QTEL_HandlerTypeDef *hqtel)
   }
   QTEL_UNLOCK(hqtel);
 
-  // prepare onextra file
-  // delete existing file
-  QTEL_File_Delete(hqtel, QTEL_File_Storage_UFS, xtraFilename);
+  #if QTEL_EN_FEATURE_HTTP
+  {
+    // prepare oneXtra file
+    // delete existing file
+    QTEL_File_Delete(hqtel, QTEL_File_Storage_UFS, xtraFilename);
 
-  // create file
-  status = QTEL_File_Open(hqtel, &xtraFile, QTEL_File_Storage_UFS, xtraFilename);
-  if (status != QTEL_OK) return status;
+    // create file
+    status = QTEL_File_Open(hqtel, &xtraFile, QTEL_File_Storage_UFS, xtraFilename);
+    if (status != QTEL_OK) return status;
 
-  hqtel->gps.xtraFileTmpPtr = &xtraFile;
-  for (uint8_t i = 4; i <= 6; i++) {
-    sprintf((char*)strTmp, "http://xtrapath%u.izatcloud.net/xtra2.bin", i);
-    status = QTEL_HTTP_Request(hqtel, QTEL_HTTP_GET, (char*)strTmp,
-                               writeXTraFile, hqtel->gps.buffer.buffer, hqtel->gps.buffer.size, 10000);
-    if (status == QTEL_OK) break;
+    hqtel->gps.xtraFileTmpPtr = &xtraFile;
+    for (uint8_t i = 4; i <= 6; i++) {
+      sprintf((char*)strTmp, "http://xtrapath%u.izatcloud.net/xtra2.bin", i);
+      status = QTEL_HTTP_Request(hqtel, QTEL_HTTP_GET, (char*)strTmp,
+                                 writeXTraFile, hqtel->gps.buffer.buffer, hqtel->gps.buffer.size, 10000);
+      if (status == QTEL_OK) break;
+    }
+    status = QTEL_File_Close(&xtraFile);
+    hqtel->gps.xtraFileTmpPtr = 0;
+    if (status != QTEL_OK) return status;
+
+    //set XtraData:
+    dt = QTEL_GetTime(hqtel);
+
+    QTEL_LOCK(hqtel);
+    QTEL_SendCMD(hqtel, "AT+QGPSXTRATIME=0,\"%04u/%02u/%02u,%02u:%02u:%02u\",1,1,3500",
+                 2000+dt.year, dt.month, dt.day, dt.hour, dt.minute, dt.second); // SUPL server
+    if (!QTEL_IsResponseOK(hqtel)) goto endcmd;
+
+    QTEL_SendCMD(hqtel, "AT+QGPSXTRADATA=\"%s\"", xtraFilename); // SUPL server
+    if (!QTEL_IsResponseOK(hqtel)) goto endcmd;
+
+    QTEL_Delay(500);
+
+    // recheck uploaded binary
+    memset(resp, 0, 32);
+    memset(strTmp, 0, 8);
+    QTEL_SendCMD(hqtel, "AT+QGPSXTRADATA?"); // SUPL server
+    if (QTEL_GetResponse(hqtel, "+QGPSXTRADATA", 13, resp, 32, QTEL_GETRESP_WAIT_OK, 2000)
+        == QTEL_OK) {
+      QTEL_ParseStr(resp, ',', 0, strTmp);
+      durtime = (uint16_t) atoi((char*)strTmp);
+      if (durtime > 60) goto endcmd;
+      status = QTEL_ERROR;
+    }
+
+    QTEL_File_Delete(hqtel, QTEL_File_Storage_UFS, xtraFilename);
   }
-  status = QTEL_File_Close(&xtraFile);
-  hqtel->gps.xtraFileTmpPtr = 0;
-  if (status != QTEL_OK) return status;
 
-  //setxtradata:
-  dt = QTEL_GetTime(hqtel);
-
-  QTEL_LOCK(hqtel);
-  QTEL_SendCMD(hqtel, "AT+QGPSXTRATIME=0,\"%04u/%02u/%02u,%02u:%02u:%02u\",1,1,3500",
-               2000+dt.year, dt.month, dt.day, dt.hour, dt.minute, dt.second); // SUPL server
-  if (!QTEL_IsResponseOK(hqtel)) goto endcmd;
-
-  QTEL_SendCMD(hqtel, "AT+QGPSXTRADATA=\"%s\"", xtraFilename); // SUPL server
-  if (!QTEL_IsResponseOK(hqtel)) goto endcmd;
-
-  QTEL_Delay(500);
-  // recheck uploaded binary
-  memset(resp, 0, 32);
-  memset(strTmp, 0, 8);
-  QTEL_SendCMD(hqtel, "AT+QGPSXTRADATA?"); // SUPL server
-  if (QTEL_GetResponse(hqtel, "+QGPSXTRADATA", 13, resp, 32, QTEL_GETRESP_WAIT_OK, 2000)
-      == QTEL_OK) {
-    QTEL_ParseStr(resp, ',', 0, strTmp);
-    durtime = (uint16_t) atoi((char*)strTmp);
-    if (durtime > 60) goto endcmd;
-    status = QTEL_ERROR;
+  #else  // if not /* QTEL_EN_FEATURE_HTTP */
+  {
+    QTEL_LOCK(hqtel);
+    QTEL_SendCMD(hqtel, "AT+QGPSXTRA=1");
+    if (!QTEL_IsResponseOK(hqtel)) goto endcmd;
   }
-
-  QTEL_File_Delete(hqtel, QTEL_File_Storage_UFS, xtraFilename);
+  #endif /* QTEL_EN_FEATURE_HTTP */
 
   endcmd:
   QTEL_UNLOCK(hqtel);
@@ -365,6 +382,7 @@ static void gpsProcessBuffer(QTEL_HandlerTypeDef *hqtel)
 }
 
 
+#if QTEL_EN_FEATURE_HTTP
 static void writeXTraFile(QTEL_HandlerTypeDef *hqtel, const uint8_t *data, uint16_t dataLen, uint32_t maxDataLen)
 {
   QTEL_File_t *xtraFilePtr = (QTEL_File_t*)hqtel->gps.xtraFileTmpPtr;
@@ -372,5 +390,6 @@ static void writeXTraFile(QTEL_HandlerTypeDef *hqtel, const uint8_t *data, uint1
 
   QTEL_File_Write(xtraFilePtr, data, dataLen);
 }
+#endif /* QTEL_EN_FEATURE_HTTP */
 
 #endif /* QTEL_EN_FEATURE_GPS */
