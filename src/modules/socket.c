@@ -355,7 +355,7 @@ void QTEL_SOCK_SetBuffer(QTEL_Socket_t *sock, uint8_t *buffer, uint16_t size)
 }
 
 
-QTEL_Status_t QTEL_SOCK_Open(QTEL_Socket_t *sock, QTEL_HandlerTypeDef *hqtel)
+QTEL_Status_t QTEL_SOCK_Open(QTEL_Socket_t *sock, QTEL_HandlerTypeDef *qtelPtr)
 {
   QTEL_Status_t status;
   sock->linkNum = -1;
@@ -364,12 +364,12 @@ QTEL_Status_t QTEL_SOCK_Open(QTEL_Socket_t *sock, QTEL_HandlerTypeDef *hqtel)
     Get_Available_LinkNum(hqtel, &(sock->linkNum));
     if (sock->linkNum < 0) return QTEL_ERROR;
     hqtel->net.sockets[sock->linkNum] = (void*)sock;
-    sock->hqtel = hqtel;
+    sock->qtel = qtelPtr;
   }
 
   status = sockOpen(sock);
   if (status != QTEL_OK && !sock->config.autoReconnect) {
-    hqtel->net.sockets[sock->linkNum] = NULL;
+    qtelPtr->net.sockets[sock->linkNum] = NULL;
     sock->linkNum = -1;
   }
 

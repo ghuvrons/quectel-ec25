@@ -57,7 +57,7 @@ typedef enum {
 
 
 typedef struct {
-  QTEL_HandlerTypeDef  *hqtel;
+  QTEL_HandlerTypeDef *qtel;
   uint8_t             state;
   uint8_t             events;               // Events flag
   int8_t              linkNum;
@@ -108,9 +108,9 @@ void          QTEL_SockRemoveListener(QTEL_HandlerTypeDef*, uint8_t linkNum);
 uint16_t      QTEL_SockSendData(QTEL_HandlerTypeDef*, int8_t linkNum, const uint8_t *data, uint16_t length);
 
 // socket method
-QTEL_Status_t  QTEL_SOCK_Init(QTEL_Socket_t*, const char *host, uint16_t port);
+QTEL_Status_t QTEL_SOCK_Init(QTEL_Socket_t*, const char *host, uint16_t port);
 void          QTEL_SOCK_SetBuffer(QTEL_Socket_t*, uint8_t *buffer, uint16_t size);
-QTEL_Status_t  QTEL_SOCK_Open(QTEL_Socket_t*, QTEL_HandlerTypeDef*);
+QTEL_Status_t QTEL_SOCK_Open(QTEL_Socket_t*, QTEL_HandlerTypeDef*);
 void          QTEL_SOCK_Close(QTEL_Socket_t*);
 uint16_t      QTEL_SOCK_SendData(QTEL_Socket_t*, const uint8_t *data, uint16_t length);
 
